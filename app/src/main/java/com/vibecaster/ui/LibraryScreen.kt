@@ -41,7 +41,7 @@ import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.SmartDisplay
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.MusicOff
-import androidx.compose.material.icons.rounded.PlaylistAdd
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.SaveAlt
 import androidx.compose.material.icons.rounded.History
@@ -169,7 +169,7 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, onOpenPlayer: () ->
                 IconButton(onClick = {
                     addTracks = tracks.filter { it.id in selectedIds }
                 }) {
-                    Icon(Icons.Rounded.PlaylistAdd, contentDescription = "Add selected to playlist", tint = Violet)
+                    Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, contentDescription = "Add selected to playlist", tint = Violet)
                 }
                 IconButton(onClick = {
                     deleteTracks = tracks.filter { it.id in selectedIds }
@@ -409,13 +409,16 @@ fun LibraryScreen(vm: MainViewModel, padding: PaddingValues, onOpenPlayer: () ->
             title = { Text("Theme") },
             text = {
                 Column {
+                    ThemeOption("System (auto)", themeMode == ThemeMode.SYSTEM) {
+                        vm.setThemeMode(ThemeMode.SYSTEM); showThemePicker = false
+                    }
                     ThemeOption("Vibe (purple)", themeMode == ThemeMode.VIBE) {
                         vm.setThemeMode(ThemeMode.VIBE); showThemePicker = false
                     }
-                    ThemeOption("Dark (black)", themeMode == ThemeMode.DARK) {
+                    ThemeOption("Dark", themeMode == ThemeMode.DARK) {
                         vm.setThemeMode(ThemeMode.DARK); showThemePicker = false
                     }
-                    ThemeOption("Light (white)", themeMode == ThemeMode.LIGHT) {
+                    ThemeOption("Light", themeMode == ThemeMode.LIGHT) {
                         vm.setThemeMode(ThemeMode.LIGHT); showThemePicker = false
                     }
                 }
@@ -456,9 +459,10 @@ private fun SettingsDialog(
                 SettingsRow(
                     title = "Theme",
                     subtitle = when (currentTheme) {
+                        ThemeMode.SYSTEM -> "System (auto)"
                         ThemeMode.VIBE -> "Vibe (purple)"
-                        ThemeMode.DARK -> "Dark (black)"
-                        ThemeMode.LIGHT -> "Light (white)"
+                        ThemeMode.DARK -> "Dark"
+                        ThemeMode.LIGHT -> "Light"
                     },
                     onClick = onOpenTheme
                 )
@@ -549,7 +553,7 @@ private fun RecentRow(
             }
             IconButton(onClick = onAddToPlaylist) {
                 Icon(
-                    Icons.Rounded.PlaylistAdd,
+                    Icons.AutoMirrored.Rounded.PlaylistAdd,
                     contentDescription = "Add to playlist",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -811,7 +815,7 @@ private fun TrackRow(
                 }
                 IconButton(onClick = onAddToPlaylist) {
                     Icon(
-                        Icons.Rounded.PlaylistAdd,
+                        Icons.AutoMirrored.Rounded.PlaylistAdd,
                         contentDescription = "Add to playlist",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -872,7 +876,7 @@ private fun DownloadRow(
             }
             IconButton(onClick = onAddToPlaylist) {
                 Icon(
-                    Icons.Rounded.PlaylistAdd,
+                    Icons.AutoMirrored.Rounded.PlaylistAdd,
                     contentDescription = "Add to playlist",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )

@@ -2,8 +2,8 @@ package com.vibecaster.ui
 
 /** Bottom navigation tabs. The user can reorder these; order is persisted. */
 enum class AppTab(val label: String) {
-    YOUTUBE("YouTube"),
-    DISCOVER("Discover"),
+    LIBRARY("Library"),
     PLAYLISTS("Playlists"),
-    LIBRARY("Library")
+    DISCOVER("Discover"),
+    YOUTUBE("YouTube")
 }

@@ -1,12 +1,14 @@
 package com.vibecaster
 
 import android.app.Application
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentSender
 import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -25,6 +27,8 @@ import com.vibecaster.data.Playlist
 import com.vibecaster.data.PlaylistRepository
 import com.vibecaster.data.Track
 import com.vibecaster.data.UpdateRepository
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
 import com.vibecaster.player.PlaybackService
 import com.vibecaster.player.PlayerHolder
 import com.vibecaster.ui.AppTab
@@ -42,6 +46,11 @@ import kotlinx.coroutines.withContext
 class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private val player: ExoPlayer = PlayerHolder.get(app)
+
+    // A controller connected to PlaybackService keeps the media notification
+    // (status bar + lock screen controls) alive on every Android version,
+    // including Android 12 where MediaSessionService needs a bound controller.
+    private var mediaController: MediaController? = null
     private val prefs = app.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
     private val _tracks = MutableStateFlow<List<Track>>(emptyList())
@@ -107,27 +116,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val deleteRequest = _deleteRequest.asStateFlow()
 
     private val _themeMode = MutableStateFlow(
-        runCatching { ThemeMode.valueOf(prefs.getString("theme", ThemeMode.VIBE.name)!!) }
-            .getOrDefault(ThemeMode.VIBE)
+        runCatching { ThemeMode.valueOf(prefs.getString("theme", ThemeMode.SYSTEM.name)!!) }
+            .getOrDefault(ThemeMode.SYSTEM)
     )
     val themeMode = _themeMode.asStateFlow()
 
-    private val _isLoggedIn = MutableStateFlow(prefs.getBoolean("is_logged_in", false))
+    private val _isLoggedIn = MutableStateFlow(false)
     val isLoggedIn = _isLoggedIn.asStateFlow()
-
-    fun login() {
-        _isLoggedIn.value = true
-        prefs.edit().putBoolean("is_logged_in", true).apply()
-    }
-
-    fun logout() {
-        _isLoggedIn.value = false
-        prefs.edit().putBoolean("is_logged_in", false).apply()
-    }
 
     private val _tabOrder = MutableStateFlow(loadTabOrder())
 
     val tabOrder = _tabOrder.asStateFlow()
+
 
     /** Current playback queue (visible in the queue sheet). */
     val queue = _queue.asStateFlow()
@@ -222,11 +222,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         // Silent update check on launch.
         checkForUpdates(manual = false)
+
+        connectMediaController()
+    }
+
+    private fun connectMediaController() {
+        val app = getApplication<Application>()
+        val token = SessionToken(app, ComponentName(app, PlaybackService::class.java))
+        val future = MediaController.Builder(app, token).buildAsync()
+        future.addListener(
+            { runCatching { mediaController = future.get() } },
+            ContextCompat.getMainExecutor(app)
+        )
+    }
+
+    override fun onCleared() {
+        mediaController?.release()
+        mediaController = null
+        super.onCleared()
     }
 
     fun setThemeMode(mode: ThemeMode) {
         _themeMode.value = mode
         prefs.edit().putString("theme", mode.name).apply()
+    }
+
+    fun login() {
+        _isLoggedIn.value = true
     }
 
     private fun loadTabOrder(): List<AppTab> {
@@ -276,9 +298,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _current.value = track
         _lyrics.value = null
         addRecent(track)
-        // Keep playing in background via foreground media service.
-        val ctx = getApplication<Application>()
-        runCatching { ctx.startService(Intent(ctx, PlaybackService::class.java)) }
+        ensurePlaybackService()
     }
 
     fun togglePlayPause() {
@@ -288,12 +308,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             player.playbackState == Player.STATE_ENDED -> {
                 player.seekTo(0L)
                 player.play()
+                ensurePlaybackService()
             }
             else -> {
                 if (player.playbackState == Player.STATE_IDLE) player.prepare()
                 player.play()
+                ensurePlaybackService()
             }
         }
+    }
+
+    /** Keeps the media-notification service alive whenever playback starts. */
+    private fun ensurePlaybackService() {
+        val ctx = getApplication<Application>()
+        runCatching { ctx.startService(Intent(ctx, PlaybackService::class.java)) }
     }
 
     fun seekTo(ms: Long) = player.seekTo(ms)
@@ -641,7 +669,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         _showUpdateDialog.value = false
     }
 
-    private fun toast(message: String) {
+    private fun toast(message: String)  {
         Toast.makeText(getApplication(), message, Toast.LENGTH_SHORT).show()
     }
 

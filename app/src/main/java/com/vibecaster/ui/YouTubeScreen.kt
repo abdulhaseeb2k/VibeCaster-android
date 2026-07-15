@@ -21,7 +21,7 @@ import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.PlaylistAdd
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -35,14 +35,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.launch
 import androidx.media3.common.util.UnstableApi
 import com.vibecaster.MainViewModel
 import com.vibecaster.data.Track
@@ -65,11 +69,19 @@ fun YouTubeScreen(vm: MainViewModel, padding: PaddingValues, onOpenPlayer: () ->
     val playlists by vm.playlists.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val downloadProgress by vm.downloadProgress.collectAsStateWithLifecycle()
-    val clipboard = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    fun hideKeyboard() {
+        keyboard?.hide()
+        focusManager.clearFocus()
+    }
 
     var addTarget by remember { mutableStateOf<Track?>(null) }
 
     fun submit() {
+        hideKeyboard()
         val q = query.trim()
         if (q.isBlank()) return
         if (q.contains("youtube.com") || q.contains("youtu.be")) {
@@ -109,7 +121,11 @@ fun YouTubeScreen(vm: MainViewModel, padding: PaddingValues, onOpenPlayer: () ->
             },
             trailingIcon = {
                 IconButton(onClick = {
-                    clipboard.getText()?.text?.let { query = it }
+                    scope.launch {
+                        val text = clipboard.getClipEntry()
+                            ?.clipData?.getItemAt(0)?.text?.toString()
+                        if (!text.isNullOrBlank()) query = text
+                    }
                 }) {
                     Icon(Icons.Rounded.ContentPaste, contentDescription = "Paste", tint = Violet)
                 }
@@ -152,6 +168,7 @@ fun YouTubeScreen(vm: MainViewModel, padding: PaddingValues, onOpenPlayer: () ->
                     downloaded = downloads.any { it.sourceUrl == track.sourceUrl },
                     progress = downloadProgress[track.id],
                     onClick = {
+                        hideKeyboard()
                         vm.playTrack(track)
                         onOpenPlayer()
                     },
@@ -249,7 +266,7 @@ private fun YtResultRow(
             }
             IconButton(onClick = onAddToPlaylist) {
                 Icon(
-                    Icons.Rounded.PlaylistAdd,
+                    Icons.AutoMirrored.Rounded.PlaylistAdd,
                     contentDescription = "Add to playlist",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )

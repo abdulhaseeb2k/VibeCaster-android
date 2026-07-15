@@ -65,15 +65,9 @@ import com.vibecaster.ui.theme.Violet
 @UnstableApi
 @Composable
 fun AppRoot(vm: MainViewModel) {
-    val isLoggedIn by vm.isLoggedIn.collectAsStateWithLifecycle()
-
-    if (!isLoggedIn) {
-        LoginScreen(vm)
-        return
-    }
-
     var tab by remember { mutableIntStateOf(0) }
     var showPlayer by remember { mutableStateOf(false) }
+
 
     val current by vm.current.collectAsStateWithLifecycle()
     val order by vm.tabOrder.collectAsStateWithLifecycle()

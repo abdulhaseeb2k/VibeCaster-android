@@ -17,16 +17,16 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("vibe-key.jks")
-            storePassword = "password"
-            keyAlias = "vibe-alias"
-            keyPassword = "password"
+            storeFile = file("../release.keystore")
+            storePassword = "password123"
+            keyAlias = "vibecaster"
+            keyPassword = "password123"
         }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = true
+            isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -37,12 +37,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
-        // NewPipeExtractor uses Java 10+ APIs like URLDecoder.decode(String, Charset)
+        // NewPipeExtractor uses Java 10+ APIs (e.g. Collectors.toUnmodifiableList)
         // that older Android runtimes lack; desugaring backports them.
         isCoreLibraryDesugaringEnabled = true
-    }
-    kotlinOptions {
-        jvmTarget = "11"
     }
     buildFeatures {
         compose = true
@@ -55,8 +52,9 @@ android {
 }
 
 dependencies {
-    // nio variant is required by NewPipeExtractor for modern Java APIs.
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.4")
+    // The _nio variant is required by NewPipeExtractor: it also backports
+    // java.net/java.nio APIs like URLDecoder.decode(String, Charset).
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs_nio:2.1.5")
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
@@ -79,10 +77,9 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-session:1.5.1")
 
-    // YouTube stream extraction (Updated to v0.27.3 for better compatibility)
-    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.27.3")
+    // YouTube stream extraction
+    implementation("com.github.TeamNewPipe:NewPipeExtractor:v0.26.2")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-
 
     // Album art / thumbnails
     implementation("io.coil-kt:coil-compose:2.7.0")

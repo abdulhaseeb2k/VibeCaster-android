@@ -1,5 +1,6 @@
 package com.vibecaster.ui.theme
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
@@ -22,8 +23,8 @@ val Cyan = Color(0xFF22D3EE)
 val TextPrimary = Color(0xFFF4F0FF)
 val TextSecondary = Color(0xFF9E93BF)
 
-/** App theme selection. */
-enum class ThemeMode { VIBE, DARK, LIGHT }
+/** App theme selection. SYSTEM follows the device's dark/light setting. */
+enum class ThemeMode { SYSTEM, VIBE, DARK, LIGHT }
 
 /** Colors that sit outside the Material color scheme (gradients, nav bar). */
 data class VibePalette(
@@ -121,11 +122,15 @@ private val AppTypography = Typography(
 )
 
 @Composable
-fun VibeCasterTheme(mode: ThemeMode = ThemeMode.VIBE, content: @Composable () -> Unit) {
-    val (scheme, palette) = when (mode) {
+fun VibeCasterTheme(mode: ThemeMode = ThemeMode.SYSTEM, content: @Composable () -> Unit) {
+    val systemDark = isSystemInDarkTheme()
+    val effective = if (mode == ThemeMode.SYSTEM) {
+        if (systemDark) ThemeMode.DARK else ThemeMode.LIGHT
+    } else mode
+    val (scheme, palette) = when (effective) {
         ThemeMode.VIBE -> VibeColors to PaletteVibe
         ThemeMode.DARK -> BlackColors to PaletteDark
-        ThemeMode.LIGHT -> LightColors to PaletteLight
+        else -> LightColors to PaletteLight
     }
     CompositionLocalProvider(LocalVibePalette provides palette) {
         MaterialTheme(

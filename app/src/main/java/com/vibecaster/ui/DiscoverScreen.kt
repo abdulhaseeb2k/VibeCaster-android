@@ -21,7 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.GraphicEq
-import androidx.compose.material.icons.rounded.PlaylistAdd
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -38,6 +38,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,6 +65,13 @@ fun DiscoverScreen(vm: MainViewModel, padding: PaddingValues, onOpenPlayer: () -
     val downloadProgress by vm.downloadProgress.collectAsStateWithLifecycle()
 
     var addTarget by remember { mutableStateOf<Track?>(null) }
+
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+    fun hideKeyboard() {
+        keyboard?.hide()
+        focusManager.clearFocus()
+    }
 
     Column(
         modifier = Modifier
@@ -95,13 +104,19 @@ fun DiscoverScreen(vm: MainViewModel, padding: PaddingValues, onOpenPlayer: () -
                         modifier = Modifier.size(20.dp)
                     )
                 } else {
-                    IconButton(onClick = { vm.searchAudius(query) }) {
+                    IconButton(onClick = {
+                        hideKeyboard()
+                        vm.searchAudius(query)
+                    }) {
                         Icon(Icons.Rounded.Search, contentDescription = "Search", tint = Violet)
                     }
                 }
             },
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { vm.searchAudius(query) }),
+            keyboardActions = KeyboardActions(onSearch = {
+                hideKeyboard()
+                vm.searchAudius(query)
+            }),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Violet,
                 unfocusedBorderColor = MaterialTheme.colorScheme.outline,
@@ -129,6 +144,7 @@ fun DiscoverScreen(vm: MainViewModel, padding: PaddingValues, onOpenPlayer: () -
                     downloaded = downloads.any { it.sourceUrl == track.uri },
                     progress = downloadProgress[track.id],
                     onClick = {
+                        hideKeyboard()
                         vm.play(track, results)
                         onOpenPlayer()
                     },
@@ -217,7 +233,7 @@ private fun DiscoverRow(
             }
             IconButton(onClick = onAddToPlaylist) {
                 Icon(
-                    Icons.Rounded.PlaylistAdd,
+                    Icons.AutoMirrored.Rounded.PlaylistAdd,
                     contentDescription = "Add to playlist",
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
