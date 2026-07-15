@@ -1,5 +1,8 @@
 package com.vibecaster.ui
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -13,15 +16,19 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Explore
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SmartDisplay
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -31,6 +38,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -41,28 +49,45 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.util.UnstableApi
 import com.vibecaster.MainViewModel
-import com.vibecaster.ui.theme.DeepSpace
-import com.vibecaster.ui.theme.SurfaceCard
+import com.vibecaster.ui.theme.Cyan
+import com.vibecaster.ui.theme.LocalVibePalette
 import com.vibecaster.ui.theme.Violet
 
 @UnstableApi
 @Composable
 fun AppRoot(vm: MainViewModel) {
+    val isLoggedIn by vm.isLoggedIn.collectAsStateWithLifecycle()
+
+    if (!isLoggedIn) {
+        LoginScreen(vm)
+        return
+    }
+
     var tab by remember { mutableIntStateOf(0) }
     var showPlayer by remember { mutableStateOf(false) }
-    val current by vm.current.collectAsStateWithLifecycle()
 
+    val current by vm.current.collectAsStateWithLifecycle()
+    val order by vm.tabOrder.collectAsStateWithLifecycle()
+
+    // Back gesture closes the full-screen player instead of exiting the app.
+    BackHandler(enabled = showPlayer) { showPlayer = false }
+
+    val palette = LocalVibePalette.current
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFF150B26), DeepSpace, Color(0xFF06030C))
+                    listOf(palette.bgTop, palette.bgMid, palette.bgBottom)
                 )
             )
     ) {
@@ -73,36 +98,25 @@ fun AppRoot(vm: MainViewModel) {
                     if (current != null) {
                         MiniPlayer(vm) { showPlayer = true }
                     }
-                    NavigationBar(containerColor = Color(0xF017102A)) {
-                        NavigationBarItem(
-                            selected = tab == 0,
-                            onClick = { tab = 0 },
-                            icon = { Icon(Icons.Rounded.LibraryMusic, contentDescription = null) },
-                            label = { Text("Library") },
-                            colors = navColors()
-                        )
-                        NavigationBarItem(
-                            selected = tab == 1,
-                            onClick = { tab = 1 },
-                            icon = { Icon(Icons.Rounded.Explore, contentDescription = null) },
-                            label = { Text("Discover") },
-                            colors = navColors()
-                        )
-                        NavigationBarItem(
-                            selected = tab == 2,
-                            onClick = { tab = 2 },
-                            icon = { Icon(Icons.Rounded.SmartDisplay, contentDescription = null) },
-                            label = { Text("YouTube") },
-                            colors = navColors()
-                        )
+                    NavigationBar(containerColor = palette.navBar) {
+                        order.forEachIndexed { index, t ->
+                            NavigationBarItem(
+                                selected = tab == index,
+                                onClick = { tab = index },
+                                icon = { Icon(t.icon(), contentDescription = null) },
+                                label = { Text(t.label) },
+                                colors = navColors()
+                            )
+                        }
                     }
                 }
             }
         ) { padding ->
-            when (tab) {
-                0 -> LibraryScreen(vm, padding) { showPlayer = true }
-                1 -> DiscoverScreen(vm, padding) { showPlayer = true }
-                2 -> YouTubeScreen(vm, padding)
+            when (order.getOrElse(tab) { AppTab.YOUTUBE }) {
+                AppTab.YOUTUBE -> YouTubeScreen(vm, padding) { showPlayer = true }
+                AppTab.DISCOVER -> DiscoverScreen(vm, padding) { showPlayer = true }
+                AppTab.PLAYLISTS -> PlaylistsScreen(vm, padding) { showPlayer = true }
+                AppTab.LIBRARY -> LibraryScreen(vm, padding) { showPlayer = true }
             }
         }
 
@@ -113,7 +127,72 @@ fun AppRoot(vm: MainViewModel) {
         ) {
             PlayerScreen(vm) { showPlayer = false }
         }
+
+        UpdateDialogHost(vm)
     }
+}
+
+@UnstableApi
+@Composable
+private fun UpdateDialogHost(vm: MainViewModel) {
+    val show by vm.showUpdateDialog.collectAsStateWithLifecycle()
+    val info by vm.updateInfo.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val update = info
+    if (!show || update == null) return
+
+    AlertDialog(
+        onDismissRequest = { vm.dismissUpdateDialog() },
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        title = { Text("Update available — v${update.version}") },
+        text = {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 360.dp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    "You have v${vm.appVersion}. A newer version is ready on GitHub.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Cyan
+                )
+                if (update.notes.isNotBlank()) {
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        "What's new:",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        update.notes,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val url = update.apkUrl ?: update.pageUrl
+                runCatching {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                }
+                vm.dismissUpdateDialog()
+            }) { Text("Download", color = Cyan) }
+        },
+        dismissButton = {
+            TextButton(onClick = { vm.dismissUpdateDialog() }) {
+                Text("Later", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    )
+}
+
+private fun AppTab.icon() = when (this) {
+    AppTab.YOUTUBE -> Icons.Rounded.SmartDisplay
+    AppTab.DISCOVER -> Icons.Rounded.Explore
+    AppTab.PLAYLISTS -> Icons.AutoMirrored.Rounded.QueueMusic
+    AppTab.LIBRARY -> Icons.Rounded.LibraryMusic
 }
 
 @Composable
@@ -130,10 +209,11 @@ private fun navColors() = NavigationBarItemDefaults.colors(
 private fun MiniPlayer(vm: MainViewModel, onOpen: () -> Unit) {
     val current by vm.current.collectAsStateWithLifecycle()
     val isPlaying by vm.isPlaying.collectAsStateWithLifecycle()
+    val isBuffering by vm.isBuffering.collectAsStateWithLifecycle()
     val track = current ?: return
 
     Surface(
-        color = SurfaceCard,
+        color = MaterialTheme.colorScheme.surfaceVariant,
         shape = RoundedCornerShape(18.dp),
         tonalElevation = 4.dp,
         modifier = Modifier
@@ -162,12 +242,21 @@ private fun MiniPlayer(vm: MainViewModel, onOpen: () -> Unit) {
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            IconButton(onClick = { vm.togglePlayPause() }) {
-                Icon(
-                    if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                    contentDescription = "Play/Pause",
-                    tint = Violet
+            if (isBuffering) {
+                CircularProgressIndicator(
+                    color = Violet,
+                    strokeWidth = 2.dp,
+                    modifier = Modifier.size(22.dp)
                 )
+                Spacer(Modifier.width(14.dp))
+            } else {
+                IconButton(onClick = { vm.togglePlayPause() }) {
+                    Icon(
+                        if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                        contentDescription = "Play/Pause",
+                        tint = Violet
+                    )
+                }
             }
             IconButton(onClick = { vm.next() }) {
                 Icon(Icons.Rounded.SkipNext, contentDescription = "Next", tint = Violet)

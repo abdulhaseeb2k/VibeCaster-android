@@ -30,6 +30,9 @@ class EightDAudioProcessor : BaseAudioProcessor() {
     /** How much of the opposite channel leaks in so sound never fully disappears from one ear. */
     @Volatile var crossfeed: Float = 0.22f
 
+    /** Reverses the rotation direction (counter-clockwise). */
+    @Volatile var reverse: Boolean = false
+
     private var phase: Double = 0.0
     private var inputChannels = 2
     private var sampleRate = 44100
@@ -90,8 +93,9 @@ class EightDAudioProcessor : BaseAudioProcessor() {
                 out.putShort(clamp(bl * gainL * dist * 1.1))
                 out.putShort(clamp(br * gainR * dist * 1.1))
 
-                phase += inc
+                phase += if (reverse) -inc else inc
                 if (phase >= 2.0 * Math.PI) phase -= 2.0 * Math.PI
+                if (phase < 0.0) phase += 2.0 * Math.PI
             }
         }
         out.flip()

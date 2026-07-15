@@ -6,6 +6,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.annotation.OptIn
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.util.UnstableApi
 import com.vibecaster.ui.AppRoot
 import com.vibecaster.ui.theme.VibeCasterTheme
@@ -18,7 +20,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         val viewModel: MainViewModel by viewModels()
         setContent {
-            VibeCasterTheme {
+            val mode by viewModel.themeMode.collectAsStateWithLifecycle()
+            VibeCasterTheme(mode) {
                 AppRoot(viewModel)
             }
         }

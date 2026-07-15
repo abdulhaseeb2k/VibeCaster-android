@@ -1,6 +1,8 @@
 package com.vibecaster.ui
 
+import android.content.Intent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,29 +11,44 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
+import androidx.compose.material.icons.automirrored.rounded._360
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
+import androidx.compose.material.icons.rounded.Lyrics
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.rounded.RepeatOne
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Shuffle
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
-import androidx.compose.material.icons.automirrored.rounded._360
+import androidx.compose.material.icons.rounded.Speed
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,22 +63,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import com.vibecaster.MainViewModel
 import com.vibecaster.ui.theme.Cyan
 import com.vibecaster.ui.theme.DeepSpace
+import com.vibecaster.ui.theme.LocalVibePalette
 import com.vibecaster.ui.theme.Pink
-import com.vibecaster.ui.theme.SurfaceCard
 import com.vibecaster.ui.theme.Violet
 import com.vibecaster.ui.theme.VioletDeep
 
 @UnstableApi
 @Composable
 fun PlayerScreen(vm: MainViewModel, onClose: () -> Unit) {
+    val context = LocalContext.current
     val current by vm.current.collectAsStateWithLifecycle()
     val isPlaying by vm.isPlaying.collectAsStateWithLifecycle()
     val position by vm.positionMs.collectAsStateWithLifecycle()
@@ -69,33 +89,52 @@ fun PlayerScreen(vm: MainViewModel, onClose: () -> Unit) {
     val effectOn by vm.effectOn.collectAsStateWithLifecycle()
     val speed by vm.rotationSpeed.collectAsStateWithLifecycle()
     val intensity by vm.intensity.collectAsStateWithLifecycle()
+    val isBuffering by vm.isBuffering.collectAsStateWithLifecycle()
+    val ytLoading by vm.ytLoading.collectAsStateWithLifecycle()
+    val shuffleOn by vm.shuffleOn.collectAsStateWithLifecycle()
+    val repeatMode by vm.repeatMode.collectAsStateWithLifecycle()
+    val playbackSpeed by vm.playbackSpeed.collectAsStateWithLifecycle()
+    val sleepRemaining by vm.sleepRemainingMs.collectAsStateWithLifecycle()
+    val bassDb by vm.bassDb.collectAsStateWithLifecycle()
+    val trebleDb by vm.trebleDb.collectAsStateWithLifecycle()
+    val reverse8d by vm.reverse8d.collectAsStateWithLifecycle()
+    val loadingFromNet = isBuffering || ytLoading
+
+    var showSpeed by remember { mutableStateOf(false) }
+    var showSleep by remember { mutableStateOf(false) }
+    var showQueue by remember { mutableStateOf(false) }
+    var showLyrics by remember { mutableStateOf(false) }
 
     // Disc rotation — spins only while playing, speed matches 8D effect if on.
     var angle by remember { mutableFloatStateOf(0f) }
     val currentRotationSpeed by rememberUpdatedState(if (effectOn) speed else 0.08f)
+    val reversed by rememberUpdatedState(reverse8d)
     LaunchedEffect(isPlaying) {
         if (isPlaying) {
             var last = 0L
             withFrameNanos { last = it }
             while (true) {
                 withFrameNanos { now ->
-                    angle = (angle + (now - last) / 1_000_000_000f * currentRotationSpeed * 360f) % 360f
+                    val delta = (now - last) / 1_000_000_000f * currentRotationSpeed * 360f
+                    angle = ((angle + if (reversed) -delta else delta) % 360f + 360f) % 360f
                     last = now
                 }
             }
         }
     }
 
+    val palette = LocalVibePalette.current
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    listOf(Color(0xFF2A1650), Color(0xFF160C2B), DeepSpace)
+                    listOf(palette.playerTop, palette.playerMid, palette.playerBottom)
                 )
             )
             .statusBarsPadding()
             .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -107,7 +146,11 @@ fun PlayerScreen(vm: MainViewModel, onClose: () -> Unit) {
                 .padding(top = 8.dp)
         ) {
             IconButton(onClick = onClose) {
-                Icon(Icons.Rounded.KeyboardArrowDown, contentDescription = "Close", tint = Color.White)
+                Icon(
+                    Icons.Rounded.KeyboardArrowDown,
+                    contentDescription = "Close",
+                    tint = MaterialTheme.colorScheme.onBackground
+                )
             }
             Text(
                 "NOW PLAYING",
@@ -116,16 +159,30 @@ fun PlayerScreen(vm: MainViewModel, onClose: () -> Unit) {
                 textAlign = TextAlign.Center,
                 modifier = Modifier.weight(1f)
             )
-            Spacer(Modifier.size(48.dp))
+            IconButton(onClick = {
+                val track = current ?: return@IconButton
+                val text = track.sourceUrl ?: "${track.title} — ${track.artist}"
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, text)
+                }
+                context.startActivity(Intent.createChooser(intent, "Share song"))
+            }) {
+                Icon(
+                    Icons.Rounded.Share,
+                    contentDescription = "Share",
+                    tint = MaterialTheme.colorScheme.onBackground
+                )
+            }
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(12.dp))
 
         // Rotating disc with glow ring
         Box(contentAlignment = Alignment.Center) {
             Box(
                 Modifier
-                    .size(292.dp)
+                    .size(272.dp)
                     .background(
                         Brush.sweepGradient(
                             listOf(Violet.copy(0.45f), Pink.copy(0.35f), Cyan.copy(0.35f), Violet.copy(0.45f))
@@ -135,25 +192,25 @@ fun PlayerScreen(vm: MainViewModel, onClose: () -> Unit) {
             )
             Box(
                 Modifier
-                    .size(276.dp)
+                    .size(256.dp)
                     .background(DeepSpace, CircleShape)
             )
             Box(modifier = Modifier.rotate(angle)) {
                 Artwork(
                     model = current?.artworkUri,
-                    size = 256.dp,
-                    corner = 128.dp
+                    size = 238.dp,
+                    corner = 119.dp
                 )
             }
             // Center hole like a vinyl
             Box(
                 Modifier
-                    .size(26.dp)
+                    .size(24.dp)
                     .background(DeepSpace, CircleShape)
             )
         }
 
-        Spacer(Modifier.height(28.dp))
+        Spacer(Modifier.height(20.dp))
 
         Text(
             current?.title ?: "Nothing playing yet",
@@ -170,27 +227,23 @@ fun PlayerScreen(vm: MainViewModel, onClose: () -> Unit) {
             overflow = TextOverflow.Ellipsis
         )
 
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(12.dp))
 
         // Seek bar
         var dragging by remember { mutableStateOf(false) }
         var dragValue by remember { mutableFloatStateOf(0f) }
         val progress = if (duration > 0) position.toFloat() / duration else 0f
-        Slider(
+        VibeSlider(
             value = if (dragging) dragValue else progress.coerceIn(0f, 1f),
-            onValueChange = {
+            onChange = {
                 dragging = true
                 dragValue = it
             },
-            onValueChangeFinished = {
+            onChangeFinished = {
                 vm.seekTo((dragValue * duration).toLong())
                 dragging = false
             },
-            colors = SliderDefaults.colors(
-                thumbColor = Pink,
-                activeTrackColor = Violet,
-                inactiveTrackColor = SurfaceCard
-            ),
+            brush = Brush.horizontalGradient(listOf(Violet, Pink)),
             modifier = Modifier.fillMaxWidth()
         )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -206,41 +259,113 @@ fun PlayerScreen(vm: MainViewModel, onClose: () -> Unit) {
             )
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(4.dp))
 
-        // Controls
+        // Main controls
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(24.dp)
         ) {
             IconButton(onClick = { vm.previous() }, modifier = Modifier.size(56.dp)) {
-                Icon(Icons.Rounded.SkipPrevious, null, tint = Color.White, modifier = Modifier.size(36.dp))
+                Icon(
+                    Icons.Rounded.SkipPrevious, null,
+                    tint = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.size(36.dp)
+                )
             }
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(76.dp)
+                    .size(72.dp)
                     .background(Brush.linearGradient(listOf(VioletDeep, Pink)), CircleShape)
             ) {
-                IconButton(onClick = { vm.togglePlayPause() }, modifier = Modifier.size(76.dp)) {
-                    Icon(
-                        if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                        contentDescription = "Play/Pause",
-                        tint = Color.White,
-                        modifier = Modifier.size(42.dp)
+                if (loadingFromNet) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(36.dp)
                     )
+                } else {
+                    IconButton(onClick = { vm.togglePlayPause() }, modifier = Modifier.size(72.dp)) {
+                        Icon(
+                            if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                            contentDescription = "Play/Pause",
+                            tint = Color.White,
+                            modifier = Modifier.size(40.dp)
+                        )
+                    }
                 }
             }
             IconButton(onClick = { vm.next() }, modifier = Modifier.size(56.dp)) {
-                Icon(Icons.Rounded.SkipNext, null, tint = Color.White, modifier = Modifier.size(36.dp))
+                Icon(
+                    Icons.Rounded.SkipNext, null,
+                    tint = MaterialTheme.colorScheme.onBackground,
+                    modifier = Modifier.size(36.dp)
+                )
             }
         }
 
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(8.dp))
 
-        // 8D control panel
+        // Tools row
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            IconButton(onClick = { vm.toggleShuffle() }) {
+                Icon(
+                    Icons.Rounded.Shuffle,
+                    contentDescription = "Shuffle",
+                    tint = if (shuffleOn) Cyan else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(onClick = { vm.cycleRepeat() }) {
+                Icon(
+                    if (repeatMode == Player.REPEAT_MODE_ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
+                    contentDescription = "Repeat",
+                    tint = if (repeatMode != Player.REPEAT_MODE_OFF) Cyan
+                    else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            TextButton(onClick = { showSpeed = true }) {
+                Text(
+                    "${if (playbackSpeed % 1f == 0f) playbackSpeed.toInt().toString() else playbackSpeed}x",
+                    color = if (playbackSpeed != 1f) Cyan else MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.titleSmall
+                )
+            }
+            IconButton(onClick = { showSleep = true }) {
+                Icon(
+                    Icons.Rounded.Bedtime,
+                    contentDescription = "Sleep timer",
+                    tint = if (sleepRemaining != null) Cyan else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(onClick = { showQueue = true }) {
+                Icon(
+                    Icons.AutoMirrored.Rounded.QueueMusic,
+                    contentDescription = "Queue",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(onClick = {
+                showLyrics = true
+                vm.fetchLyrics()
+            }) {
+                Icon(
+                    Icons.Rounded.Lyrics,
+                    contentDescription = "Lyrics",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // 8D + sound panel
         Surface(
-            color = SurfaceCard.copy(alpha = 0.75f),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
             shape = RoundedCornerShape(20.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
@@ -270,18 +395,247 @@ fun PlayerScreen(vm: MainViewModel, onClose: () -> Unit) {
                         range = 0.05f..0.5f,
                         onChange = { vm.setRotationSpeed(it) }
                     )
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(10.dp))
                     LabeledSlider(
                         label = "Depth",
                         value = intensity,
                         range = 0.2f..1f,
                         onChange = { vm.setIntensity(it) }
                     )
+                    Spacer(Modifier.height(10.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "Reverse direction",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
+                            modifier = Modifier.weight(1f)
+                        )
+                        Switch(
+                            checked = reverse8d,
+                            onCheckedChange = { vm.setReverse8d(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedTrackColor = VioletDeep,
+                                checkedThumbColor = Color.White
+                            )
+                        )
+                    }
                 }
             }
         }
 
+        Spacer(Modifier.height(12.dp))
+
+        // Equalizer panel
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
+            shape = RoundedCornerShape(20.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.GraphicEq, null, tint = Pink)
+                    Spacer(Modifier.width(10.dp))
+                    Text(
+                        "Equalizer",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = {
+                        vm.setBass(0f)
+                        vm.setTreble(0f)
+                    }) { Text("Reset", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
+                LabeledSlider(
+                    label = "Bass  (${if (bassDb >= 0) "+" else ""}${bassDb.toInt()} dB)",
+                    value = bassDb,
+                    range = -12f..12f,
+                    onChange = { vm.setBass(it) }
+                )
+                Spacer(Modifier.height(10.dp))
+                LabeledSlider(
+                    label = "Treble  (${if (trebleDb >= 0) "+" else ""}${trebleDb.toInt()} dB)",
+                    value = trebleDb,
+                    range = -12f..12f,
+                    onChange = { vm.setTreble(it) }
+                )
+            }
+        }
+
         Spacer(Modifier.height(16.dp))
+    }
+
+    if (showSpeed) {
+        AlertDialog(
+            onDismissRequest = { showSpeed = false },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            title = { Text("Playback speed") },
+            text = {
+                Column {
+                    listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEach { s ->
+                        Text(
+                            "${s}x" + if (s == 1f) "  (normal)" else "",
+                            color = if (playbackSpeed == s) Pink else MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    vm.setPlaybackSpeed(s)
+                                    showSpeed = false
+                                }
+                                .padding(vertical = 10.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSpeed = false }) {
+                    Text("Close", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        )
+    }
+
+    if (showSleep) {
+        AlertDialog(
+            onDismissRequest = { showSleep = false },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            title = { Text("Sleep timer") },
+            text = {
+                Column {
+                    sleepRemaining?.let {
+                        Text(
+                            "Music stops in ${formatTime(it)}",
+                            color = Cyan,
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Spacer(Modifier.height(8.dp))
+                    }
+                    listOf(15, 30, 45, 60, 90).forEach { min ->
+                        Text(
+                            "$min minutes",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    vm.setSleepTimer(min)
+                                    showSleep = false
+                                }
+                                .padding(vertical = 10.dp)
+                        )
+                    }
+                    if (sleepRemaining != null) {
+                        Text(
+                            "Turn off timer",
+                            color = Pink,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    vm.setSleepTimer(null)
+                                    showSleep = false
+                                }
+                                .padding(vertical = 10.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showSleep = false }) {
+                    Text("Close", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        )
+    }
+
+    if (showQueue) {
+        val queue by vm.queue.collectAsStateWithLifecycle()
+        val queueIndex by vm.queueIndex.collectAsStateWithLifecycle()
+        AlertDialog(
+            onDismissRequest = { showQueue = false },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            title = { Text("Up next (${queue.size})") },
+            text = {
+                LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
+                    itemsIndexed(queue) { i, t ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    vm.playQueueItem(i)
+                                }
+                                .padding(vertical = 8.dp)
+                        ) {
+                            Text(
+                                "${i + 1}.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.width(28.dp)
+                            )
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    t.title,
+                                    color = if (i == queueIndex) Violet else MaterialTheme.colorScheme.onSurface,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    t.artist,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            if (i == queueIndex) {
+                                Icon(Icons.Rounded.GraphicEq, null, tint = Pink, modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showQueue = false }) {
+                    Text("Close", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        )
+    }
+
+    if (showLyrics) {
+        val lyrics by vm.lyrics.collectAsStateWithLifecycle()
+        val lyricsLoading by vm.lyricsLoading.collectAsStateWithLifecycle()
+        AlertDialog(
+            onDismissRequest = { showLyrics = false },
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            title = { Text(current?.title ?: "Lyrics", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            text = {
+                if (lyricsLoading) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(color = Violet, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Text("Finding lyrics...", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .heightIn(max = 420.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        Text(
+                            lyrics ?: "No lyrics loaded.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showLyrics = false }) {
+                    Text("Close", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        )
     }
 }
 
@@ -296,17 +650,13 @@ private fun LabeledSlider(
         Text(
             label,
             style = MaterialTheme.typography.labelMedium,
-            color = Color.White.copy(alpha = 0.8f)
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f)
         )
-        Slider(
+        VibeSlider(
             value = value,
-            onValueChange = onChange,
-            valueRange = range,
-            colors = SliderDefaults.colors(
-                thumbColor = Cyan,
-                activeTrackColor = Cyan,
-                inactiveTrackColor = Color.White.copy(alpha = 0.2f)
-            )
+            onChange = onChange,
+            range = range,
+            brush = Brush.horizontalGradient(listOf(Cyan, Violet))
         )
     }
 }

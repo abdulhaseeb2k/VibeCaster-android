@@ -1,7 +1,7 @@
 package com.vibecaster.ui
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -10,22 +10,26 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ContentPaste
-import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.SmartDisplay
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.DownloadDone
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.PlaylistAdd
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -34,25 +38,47 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.common.util.UnstableApi
 import com.vibecaster.MainViewModel
+import com.vibecaster.data.Track
 import com.vibecaster.ui.theme.Cyan
 import com.vibecaster.ui.theme.Pink
 import com.vibecaster.ui.theme.Violet
-import com.vibecaster.ui.theme.VioletDeep
 
+/**
+ * YouTube tab: one field for both searching songs and pasting video links.
+ * Input containing "youtube.com" / "youtu.be" is treated as a link.
+ */
 @UnstableApi
 @Composable
-fun YouTubeScreen(vm: MainViewModel, padding: PaddingValues) {
-    var url by remember { mutableStateOf("") }
+fun YouTubeScreen(vm: MainViewModel, padding: PaddingValues, onOpenPlayer: () -> Unit) {
+    var query by remember { mutableStateOf("") }
+    val results by vm.ytResults.collectAsStateWithLifecycle()
     val loading by vm.ytLoading.collectAsStateWithLifecycle()
     val error by vm.ytError.collectAsStateWithLifecycle()
+    val current by vm.current.collectAsStateWithLifecycle()
+    val playlists by vm.playlists.collectAsStateWithLifecycle()
+    val downloads by vm.downloads.collectAsStateWithLifecycle()
+    val downloadProgress by vm.downloadProgress.collectAsStateWithLifecycle()
     val clipboard = LocalClipboardManager.current
+
+    var addTarget by remember { mutableStateOf<Track?>(null) }
+
+    fun submit() {
+        val q = query.trim()
+        if (q.isBlank()) return
+        if (q.contains("youtube.com") || q.contains("youtu.be")) {
+            vm.playFromYouTube(q)
+            onOpenPlayer()
+        } else {
+            vm.searchYouTube(q)
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -61,32 +87,35 @@ fun YouTubeScreen(vm: MainViewModel, padding: PaddingValues) {
             .padding(horizontal = 20.dp)
     ) {
         Spacer(Modifier.height(16.dp))
+        Text("YouTube", style = MaterialTheme.typography.headlineMedium)
         Text(
-            "Listen from YouTube",
-            style = MaterialTheme.typography.headlineMedium
-        )
-        Text(
-            "Paste a video link — its audio will play in 8D",
+            "Search any song, or paste a video link",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(16.dp))
 
         OutlinedTextField(
-            value = url,
-            onValueChange = { url = it },
-            placeholder = { Text("https://youtube.com/watch?v=...") },
+            value = query,
+            onValueChange = { query = it },
+            placeholder = { Text("Search songs or paste a link...") },
             singleLine = true,
             shape = RoundedCornerShape(16.dp),
-            leadingIcon = { Icon(Icons.Rounded.SmartDisplay, null, tint = Pink) },
+            leadingIcon = {
+                IconButton(onClick = { submit() }) {
+                    Icon(Icons.Rounded.Search, contentDescription = "Search", tint = Pink)
+                }
+            },
             trailingIcon = {
                 IconButton(onClick = {
-                    clipboard.getText()?.text?.let { url = it }
+                    clipboard.getText()?.text?.let { query = it }
                 }) {
                     Icon(Icons.Rounded.ContentPaste, contentDescription = "Paste", tint = Violet)
                 }
             },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { submit() }),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Violet,
                 unfocusedBorderColor = MaterialTheme.colorScheme.outline,
@@ -95,61 +124,136 @@ fun YouTubeScreen(vm: MainViewModel, padding: PaddingValues) {
             modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(Modifier.height(16.dp))
-
-        Button(
-            onClick = { vm.playFromYouTube(url) },
-            enabled = !loading && url.isNotBlank(),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = VioletDeep),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(54.dp)
-        ) {
-            if (loading) {
-                CircularProgressIndicator(
-                    color = Color.White,
-                    strokeWidth = 2.5.dp,
-                    modifier = Modifier.size(22.dp)
-                )
-                Spacer(Modifier.width(12.dp))
-                Text("Extracting audio...", color = Color.White)
-            } else {
-                Icon(Icons.Rounded.PlayArrow, null, tint = Color.White)
-                Spacer(Modifier.width(8.dp))
-                Text("Play in 8D", color = Color.White)
-            }
+        if (loading) {
+            Spacer(Modifier.height(12.dp))
+            LinearProgressIndicator(
+                color = Violet,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
 
         if (error != null) {
-            Spacer(Modifier.height(16.dp))
-            Text(
-                error ?: "",
-                color = Pink,
-                style = MaterialTheme.typography.bodyMedium
-            )
+            Spacer(Modifier.height(12.dp))
+            Text(error ?: "", color = Pink, style = MaterialTheme.typography.bodyMedium)
         }
 
-        Spacer(Modifier.height(32.dp))
+        Spacer(Modifier.height(12.dp))
 
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier
-                    .size(8.dp)
-                    .background(Brush.linearGradient(listOf(Violet, Cyan)), CircleShape)
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                "Tip: Use headphones for the best 8D experience.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(bottom = 12.dp),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            items(results, key = { it.id }) { track ->
+                YtResultRow(
+                    track = track,
+                    isCurrent = current?.sourceUrl != null && current?.sourceUrl == track.sourceUrl,
+                    downloaded = downloads.any { it.sourceUrl == track.sourceUrl },
+                    progress = downloadProgress[track.id],
+                    onClick = {
+                        vm.playTrack(track)
+                        onOpenPlayer()
+                    },
+                    onAddToPlaylist = { addTarget = track },
+                    onDownload = { vm.download(track) }
+                )
+            }
         }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "Note: YouTube extraction is for personal use only.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
+    addTarget?.let { track ->
+        AddToPlaylistDialog(
+            playlists = playlists.map { it.name },
+            onPick = { name ->
+                vm.addToPlaylist(name, track)
+                addTarget = null
+            },
+            onCreateAndAdd = { name ->
+                vm.createPlaylist(name)
+                vm.addToPlaylist(name, track)
+                addTarget = null
+            },
+            onDismiss = { addTarget = null }
         )
+    }
+}
+
+@Composable
+private fun YtResultRow(
+    track: Track,
+    isCurrent: Boolean,
+    downloaded: Boolean,
+    progress: Float?,
+    onClick: () -> Unit,
+    onAddToPlaylist: () -> Unit,
+    onDownload: () -> Unit
+) {
+    Surface(
+        color = if (isCurrent) Violet.copy(alpha = 0.18f)
+        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(10.dp)
+        ) {
+            Artwork(model = track.artworkUri, size = 52.dp, corner = 12.dp)
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    track.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = if (isCurrent) Violet else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        track.artist,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    if (track.durationMs > 0) {
+                        Text(
+                            "  •  " + formatTime(track.durationMs),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+            if (isCurrent) {
+                Icon(Icons.Rounded.GraphicEq, contentDescription = "Playing", tint = Pink)
+            }
+            when {
+                progress != null -> DownloadProgressBadge(progress)
+                downloaded -> Icon(
+                    Icons.Rounded.DownloadDone,
+                    contentDescription = "Downloaded",
+                    tint = Cyan
+                )
+                else -> IconButton(onClick = onDownload) {
+                    Icon(
+                        Icons.Rounded.Download,
+                        contentDescription = "Download for offline",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            IconButton(onClick = onAddToPlaylist) {
+                Icon(
+                    Icons.Rounded.PlaylistAdd,
+                    contentDescription = "Add to playlist",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
     }
 }

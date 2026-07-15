@@ -12,6 +12,7 @@ import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.vibecaster.audio.EightDAudioProcessor
+import com.vibecaster.audio.ToneAudioProcessor
 import com.vibecaster.youtube.YouTubeResolver
 
 /**
@@ -22,6 +23,7 @@ import com.vibecaster.youtube.YouTubeResolver
 object PlayerHolder {
 
     val processor = EightDAudioProcessor()
+    val toneProcessor = ToneAudioProcessor()
 
     @Volatile
     private var player: ExoPlayer? = null
@@ -39,7 +41,7 @@ object PlayerHolder {
                     enableAudioTrackPlaybackParams: Boolean
                 ): AudioSink {
                     return DefaultAudioSink.Builder(context)
-                        .setAudioProcessors(arrayOf(processor))
+                        .setAudioProcessors(arrayOf(toneProcessor, processor))
                         .build()
                 }
             }

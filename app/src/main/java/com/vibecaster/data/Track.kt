@@ -7,5 +7,7 @@ data class Track(
     val uri: String,
     val artworkUri: String?,
     val durationMs: Long,
-    val fromYouTube: Boolean = false
+    val fromYouTube: Boolean = false,
+    /** Original page URL (YouTube). Used to re-resolve expired stream URLs. */
+    val sourceUrl: String? = null
 )

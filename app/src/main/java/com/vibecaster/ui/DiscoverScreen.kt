@@ -18,7 +18,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -44,7 +47,6 @@ import com.vibecaster.MainViewModel
 import com.vibecaster.data.Track
 import com.vibecaster.ui.theme.Cyan
 import com.vibecaster.ui.theme.Pink
-import com.vibecaster.ui.theme.SurfaceCard
 import com.vibecaster.ui.theme.Violet
 
 /** Search and stream free music from Audius. */
@@ -56,6 +58,11 @@ fun DiscoverScreen(vm: MainViewModel, padding: PaddingValues, onOpenPlayer: () -
     val loading by vm.audiusLoading.collectAsStateWithLifecycle()
     val error by vm.audiusError.collectAsStateWithLifecycle()
     val current by vm.current.collectAsStateWithLifecycle()
+    val playlists by vm.playlists.collectAsStateWithLifecycle()
+    val downloads by vm.downloads.collectAsStateWithLifecycle()
+    val downloadProgress by vm.downloadProgress.collectAsStateWithLifecycle()
+
+    var addTarget by remember { mutableStateOf<Track?>(null) }
 
     Column(
         modifier = Modifier
@@ -119,20 +126,49 @@ fun DiscoverScreen(vm: MainViewModel, padding: PaddingValues, onOpenPlayer: () -
                 DiscoverRow(
                     track = track,
                     isCurrent = current?.uri == track.uri,
+                    downloaded = downloads.any { it.sourceUrl == track.uri },
+                    progress = downloadProgress[track.id],
                     onClick = {
                         vm.play(track, results)
                         onOpenPlayer()
-                    }
+                    },
+                    onAddToPlaylist = { addTarget = track },
+                    onDownload = { vm.download(track) }
                 )
             }
         }
     }
+
+    addTarget?.let { track ->
+        AddToPlaylistDialog(
+            playlists = playlists.map { it.name },
+            onPick = { name ->
+                vm.addToPlaylist(name, track)
+                addTarget = null
+            },
+            onCreateAndAdd = { name ->
+                vm.createPlaylist(name)
+                vm.addToPlaylist(name, track)
+                addTarget = null
+            },
+            onDismiss = { addTarget = null }
+        )
+    }
 }
 
 @Composable
-private fun DiscoverRow(track: Track, isCurrent: Boolean, onClick: () -> Unit) {
+private fun DiscoverRow(
+    track: Track,
+    isCurrent: Boolean,
+    downloaded: Boolean,
+    progress: Float?,
+    onClick: () -> Unit,
+    onAddToPlaylist: () -> Unit,
+    onDownload: () -> Unit
+) {
     Surface(
-        color = if (isCurrent) Violet.copy(alpha = 0.18f) else SurfaceCard.copy(alpha = 0.65f),
+        color = if (isCurrent) Violet.copy(alpha = 0.18f)
+        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.65f),
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier
             .fillMaxWidth()
@@ -160,14 +196,30 @@ private fun DiscoverRow(track: Track, isCurrent: Boolean, onClick: () -> Unit) {
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(4.dp))
             if (isCurrent) {
                 Icon(Icons.Rounded.GraphicEq, contentDescription = "Playing", tint = Pink)
-            } else {
-                Text(
-                    formatTime(track.durationMs),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+            }
+            when {
+                progress != null -> DownloadProgressBadge(progress)
+                downloaded -> Icon(
+                    Icons.Rounded.DownloadDone,
+                    contentDescription = "Downloaded",
+                    tint = Cyan
+                )
+                else -> IconButton(onClick = onDownload) {
+                    Icon(
+                        Icons.Rounded.Download,
+                        contentDescription = "Download for offline",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            IconButton(onClick = onAddToPlaylist) {
+                Icon(
+                    Icons.Rounded.PlaylistAdd,
+                    contentDescription = "Add to playlist",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
